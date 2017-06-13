@@ -1,0 +1,42 @@
+diff -r -u tvision/classes/tdesktop.cc tvision_patched/classes/tdesktop.cc
+--- tvision/classes/tdesktop.cc	2003-06-05 23:34:36.000000000 +0400
++++ tvision_patched/classes/tdesktop.cc	2017-03-02 23:04:35.944954526 +0300
+@@ -144,7 +144,7 @@
+ {
+     unsigned res1 = 2;
+     unsigned res2 = i/res1;
+-    while( abs( res1 - res2 ) > 1 )
++    while( abs( (int)res1 - (int)res2 ) > 1 )
+         {
+         res1 = (res1 + res2)/2;
+         res2 = i/res1;
+diff -r -u tvision/classes/tdisplay.cc tvision_patched/classes/tdisplay.cc
+--- tvision/classes/tdisplay.cc	2003-12-02 16:44:55.000000000 +0300
++++ tvision_patched/classes/tdisplay.cc	2017-03-02 23:38:57.263806199 +0300
+@@ -381,10 +381,10 @@
+  if (firstXMatch!=-1)
+    {// Return the closest y that match x
+     i=indexMin=firstXMatch;
+-    minDif=abs(res[i].y-y);
++    minDif=abs((int)res[i].y-(int)y);
+     while (++i<cant && res[i].x==x)
+       {
+-       dif=abs(res[i].y-y);
++       dif=abs((int)res[i].y-(int)y);
+        if (dif<minDif)
+          {
+           minDif=dif;
+@@ -396,11 +396,11 @@
+    }
+  // No x match, looks the one with minimum differences
+  indexMin=0;
+- minDif=abs(res[0].y-y)+abs(res[0].x-x);
++ minDif=abs((int)res[0].y-(int)y)+abs((int)res[0].x-(int)x);
+  i=1;
+  while (i<cant)
+    {
+-    dif=abs(res[i].y-y)+abs(res[i].x-x);
++    dif=abs((int)res[i].y-(int)y)+abs((int)res[i].x-(int)x);
+     if (dif<minDif)
+       {
+        minDif=dif;

@@ -1,0 +1,948 @@
+diff -r -u less-487/charset.c less-8bit-487-beta-inprocess/charset.c
+--- less-487/charset.c	2016-10-25 17:37:35.000000000 +0300
++++ less-8bit-487-beta-inprocess/charset.c	2017-03-30 12:38:56.350149857 +0300
+@@ -22,8 +22,6 @@
+ 
+ #include "charset.h"
+ 
+-public int utf_mode = 0;
+-
+ /*
+  * Predefined character sets,
+  * selected by the LESSCHARSET environment variable.
+@@ -34,7 +32,6 @@
+ 	char *desc;
+ } charsets[] = {
+ 	{ "ascii",		NULL,       "8bcccbcc18b95.b" },
+-	{ "utf-8",		&utf_mode,  "8bcccbcc18b95.b126.bb" },
+ 	{ "iso8859",		NULL,       "8bcccbcc18b95.33b." },
+ 	{ "latin3",		NULL,       "8bcccbcc18b95.33b5.b8.b15.b4.b12.b18.b12.b." },
+ 	{ "arabic",		NULL,       "8bcccbcc18b95.33b.3b.7b2.13b.3b.b26.5b19.b" },
+@@ -63,9 +60,6 @@
+ 	char *name;
+ 	char *oname;
+ } cs_aliases[] = {
+-	{ "UTF-8",		"utf-8" },
+-	{ "utf8",		"utf-8" },
+-	{ "UTF8",		"utf-8" },
+ 	{ "ANSI_X3.4-1968",	"ascii" },
+ 	{ "US-ASCII",		"ascii" },
+ 	{ "latin1",		"iso8859" },
+@@ -113,7 +107,6 @@
+ 
+ static char chardef[256];
+ static char *binfmt = NULL;
+-static char *utfbinfmt = NULL;
+ public int binattr = AT_STANDOUT;
+ 
+ 
+@@ -249,7 +242,7 @@
+ #endif
+ 
+ /*
+- * Define the printing format for control (or binary utf) chars.
++ * Define the printing format for control chars.
+  */
+    	static void
+ setbinfmt(s, fmtvarptr, default_fmt)
+@@ -257,21 +250,6 @@
+ 	char **fmtvarptr;
+ 	char *default_fmt;
+ {
+-	if (s && utf_mode)
+-	{
+-		/* It would be too hard to account for width otherwise.  */
+-		char *t = s;
+-		while (*t)
+-		{
+-			if (*t < ' ' || *t > '~')
+-			{
+-				s = default_fmt;
+-				goto attr;
+-			}
+-			t++;
+-		}
+-	}
+-
+ 	/* %n is evil */
+ 	if (s == NULL || *s == '\0' ||
+ 	    (*s == '*' && (s[1] == '\0' || s[2] == '\0' || strchr(s + 2, 'n'))) ||
+@@ -333,21 +311,6 @@
+ #endif
+ #endif
+ 
+-#if HAVE_STRSTR
+-	/*
+-	 * Check whether LC_ALL, LC_CTYPE or LANG look like UTF-8 is used.
+-	 */
+-	if ((s = lgetenv("LC_ALL")) != NULL ||
+-	    (s = lgetenv("LC_CTYPE")) != NULL ||
+-	    (s = lgetenv("LANG")) != NULL)
+-	{
+-		if (   strstr(s, "UTF-8") != NULL || strstr(s, "utf-8") != NULL
+-		    || strstr(s, "UTF8")  != NULL || strstr(s, "utf8")  != NULL)
+-			if (icharset("utf-8", 1))
+-				return;
+-	}
+-#endif
+-
+ #if HAVE_LOCALE
+ 	/*
+ 	 * Get character definitions from locale functions,
+@@ -384,9 +347,6 @@
+ 
+ 	s = lgetenv("LESSBINFMT");
+ 	setbinfmt(s, &binfmt, "*s<%02X>");
+-	
+-	s = lgetenv("LESSUTFBINFMT");
+-	setbinfmt(s, &utfbinfmt, "<U+%04lX>");
+ }
+ 
+ /*
+@@ -396,8 +356,6 @@
+ binary_char(c)
+ 	LWCHAR c;
+ {
+-	if (utf_mode)
+-		return (is_ubin_char(c));
+ 	c &= 0377;
+ 	return (chardef[c] & IS_BINARY_CHAR);
+ }
+@@ -425,7 +383,7 @@
+ 	static char buf[32];
+ 
+ 	c &= 0377;
+-	if ((c < 128 || !utf_mode) && !control_char(c))
++	if ((c < 128) && !control_char(c))
+ 		SNPRINTF1(buf, sizeof(buf), "%c", (int) c);
+ 	else if (c == ESC)
+ 		strcpy(buf, "ESC");
+@@ -451,228 +409,6 @@
+ }
+ 
+ /*
+- * Return the printable form of a UTF-8 character.
+- */
+-	public char *
+-prutfchar(ch)
+-	LWCHAR ch;
+-{
+-	static char buf[32];
+-
+-	if (ch == ESC)
+-		strcpy(buf, "ESC");
+-  	else if (ch < 128 && control_char(ch))
+-	{
+-		if (!control_char(ch ^ 0100))
+-			SNPRINTF1(buf, sizeof(buf), "^%c", ((char) ch) ^ 0100);
+-		else
+-			SNPRINTF1(buf, sizeof(buf), binfmt, (char) ch);
+-	} else if (is_ubin_char(ch))
+-	{
+-		SNPRINTF1(buf, sizeof(buf), utfbinfmt, ch);
+-	} else
+-	{
+-		char *p = buf;
+-		if (ch >= 0x80000000)
+-			ch = 0xFFFD; /* REPLACEMENT CHARACTER */
+-		put_wchar(&p, ch);
+-		*p = '\0';
+-	}
+-	return (buf);
+-}
+-
+-/*
+- * Get the length of a UTF-8 character in bytes.
+- */
+-	public int
+-utf_len(ch)
+-	char ch;
+-{
+-	if ((ch & 0x80) == 0)
+-		return 1;
+-	if ((ch & 0xE0) == 0xC0)
+-		return 2;
+-	if ((ch & 0xF0) == 0xE0)
+-		return 3;
+-	if ((ch & 0xF8) == 0xF0)
+-		return 4;
+-	if ((ch & 0xFC) == 0xF8)
+-		return 5;
+-	if ((ch & 0xFE) == 0xFC)
+-		return 6;
+-	/* Invalid UTF-8 encoding. */
+-	return 1;
+-}
+-
+-/*
+- * Does the parameter point to the lead byte of a well-formed UTF-8 character?
+- */
+-	public int
+-is_utf8_well_formed(s, slen)
+-	unsigned char *s;
+-	int slen;
+-{
+-	int i;
+-	int len;
+-
+-	if (IS_UTF8_INVALID(s[0]))
+-		return (0);
+-
+-	len = utf_len((char) s[0]);
+-	if (len > slen)
+-		return (0);
+-	if (len == 1)
+-		return (1);
+-	if (len == 2)
+-	{
+-		if (s[0] < 0xC2)
+-		    return (0);
+-	} else
+-	{
+-		unsigned char mask;
+-		mask = (~((1 << (8-len)) - 1)) & 0xFF;
+-		if (s[0] == mask && (s[1] & mask) == 0x80)
+-			return (0);
+-	}
+-
+-	for (i = 1;  i < len;  i++)
+-		if (!IS_UTF8_TRAIL(s[i]))
+-			return (0);
+-	return (1);
+-}
+-
+-/*
+- * Return number of invalid UTF-8 sequences found in a buffer.
+- */
+-	public int
+-utf_bin_count(data, len)
+-	unsigned char *data;
+-	int len;
+-{
+-	int bin_count = 0;
+-	while (len > 0)
+-	{
+-		if (is_utf8_well_formed(data, len))
+-		{
+-			int clen = utf_len(*data);
+-			data += clen;
+-			len -= clen;
+-		} else
+-		{
+-			/* Skip to next lead byte. */
+-			bin_count++;
+-			do {
+-				++data;
+-				--len;
+-			} while (len > 0 && !IS_UTF8_LEAD(*data));
+-		}
+-	}
+-	return (bin_count);
+-}
+-
+-/*
+- * Get the value of a UTF-8 character.
+- */
+-	public LWCHAR
+-get_wchar(p)
+-	char *p;
+-{
+-	switch (utf_len(p[0]))
+-	{
+-	case 1:
+-	default:
+-		/* 0xxxxxxx */
+-		return (LWCHAR)
+-			(p[0] & 0xFF);
+-	case 2:
+-		/* 110xxxxx 10xxxxxx */
+-		return (LWCHAR) (
+-			((p[0] & 0x1F) << 6) |
+-			(p[1] & 0x3F));
+-	case 3:
+-		/* 1110xxxx 10xxxxxx 10xxxxxx */
+-		return (LWCHAR) (
+-			((p[0] & 0x0F) << 12) |
+-			((p[1] & 0x3F) << 6) |
+-			(p[2] & 0x3F));
+-	case 4:
+-		/* 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx */
+-		return (LWCHAR) (
+-			((p[0] & 0x07) << 18) |
+-			((p[1] & 0x3F) << 12) | 
+-			((p[2] & 0x3F) << 6) | 
+-			(p[3] & 0x3F));
+-	case 5:
+-		/* 111110xx 10xxxxxx 10xxxxxx 10xxxxxx 10xxxxxx */
+-		return (LWCHAR) (
+-			((p[0] & 0x03) << 24) |
+-			((p[1] & 0x3F) << 18) | 
+-			((p[2] & 0x3F) << 12) | 
+-			((p[3] & 0x3F) << 6) | 
+-			(p[4] & 0x3F));
+-	case 6:
+-		/* 1111110x 10xxxxxx 10xxxxxx 10xxxxxx 10xxxxxx 10xxxxxx */
+-		return (LWCHAR) (
+-			((p[0] & 0x01) << 30) |
+-			((p[1] & 0x3F) << 24) | 
+-			((p[2] & 0x3F) << 18) | 
+-			((p[3] & 0x3F) << 12) | 
+-			((p[4] & 0x3F) << 6) | 
+-			(p[5] & 0x3F));
+-	}
+-}
+-
+-/*
+- * Store a character into a UTF-8 string.
+- */
+-	public void
+-put_wchar(pp, ch)
+-	char **pp;
+-	LWCHAR ch;
+-{
+-	if (!utf_mode || ch < 0x80) 
+-	{
+-		/* 0xxxxxxx */
+-		*(*pp)++ = (char) ch;
+-	} else if (ch < 0x800)
+-	{
+-		/* 110xxxxx 10xxxxxx */
+-		*(*pp)++ = (char) (0xC0 | ((ch >> 6) & 0x1F));
+-		*(*pp)++ = (char) (0x80 | (ch & 0x3F));
+-	} else if (ch < 0x10000)
+-	{
+-		/* 1110xxxx 10xxxxxx 10xxxxxx */
+-		*(*pp)++ = (char) (0xE0 | ((ch >> 12) & 0x0F));
+-		*(*pp)++ = (char) (0x80 | ((ch >> 6) & 0x3F));
+-		*(*pp)++ = (char) (0x80 | (ch & 0x3F));
+-	} else if (ch < 0x200000)
+-	{
+-		/* 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx */
+-		*(*pp)++ = (char) (0xF0 | ((ch >> 18) & 0x07));
+-		*(*pp)++ = (char) (0x80 | ((ch >> 12) & 0x3F));
+-		*(*pp)++ = (char) (0x80 | ((ch >> 6) & 0x3F));
+-		*(*pp)++ = (char) (0x80 | (ch & 0x3F));
+-	} else if (ch < 0x4000000)
+-	{
+-		/* 111110xx 10xxxxxx 10xxxxxx 10xxxxxx 10xxxxxx */
+-		*(*pp)++ = (char) (0xF0 | ((ch >> 24) & 0x03));
+-		*(*pp)++ = (char) (0x80 | ((ch >> 18) & 0x3F));
+-		*(*pp)++ = (char) (0x80 | ((ch >> 12) & 0x3F));
+-		*(*pp)++ = (char) (0x80 | ((ch >> 6) & 0x3F));
+-		*(*pp)++ = (char) (0x80 | (ch & 0x3F));
+-	} else 
+-	{
+-		/* 1111110x 10xxxxxx 10xxxxxx 10xxxxxx 10xxxxxx 10xxxxxx */
+-		*(*pp)++ = (char) (0xF0 | ((ch >> 30) & 0x01));
+-		*(*pp)++ = (char) (0x80 | ((ch >> 24) & 0x3F));
+-		*(*pp)++ = (char) (0x80 | ((ch >> 18) & 0x3F));
+-		*(*pp)++ = (char) (0x80 | ((ch >> 12) & 0x3F));
+-		*(*pp)++ = (char) (0x80 | ((ch >> 6) & 0x3F));
+-		*(*pp)++ = (char) (0x80 | (ch & 0x3F));
+-	}
+-}
+-
+-/*
+  * Step forward or backward one character in a string.
+  */
+ 	public LWCHAR
+@@ -685,34 +421,11 @@
+ 	int len;
+ 	char *p = *pp;
+ 
+-	if (!utf_mode)
+-	{
+ 		/* It's easy if chars are one byte. */
+ 		if (dir > 0)
+ 			ch = (LWCHAR) ((p < limit) ? *p++ : 0);
+ 		else
+ 			ch = (LWCHAR) ((p > limit) ? *--p : 0);
+-	} else if (dir > 0)
+-	{
+-		len = utf_len(*p);
+-		if (p + len > limit)
+-		{
+-			ch = 0;
+-			p = limit;
+-		} else
+-		{
+-			ch = get_wchar(p);
+-			p += len;
+-		}
+-	} else
+-	{
+-		while (p > limit && IS_UTF8_TRAIL(p[-1]))
+-			p--;
+-		if (p > limit)
+-			ch = get_wchar(--p);
+-		else
+-			ch = 0;
+-	}
+ 	*pp = p;
+ 	return ch;
+ }
+diff -r -u less-487/cmdbuf.c less-8bit-487-beta-inprocess/cmdbuf.c
+--- less-487/cmdbuf.c	2016-10-25 17:37:35.000000000 +0300
++++ less-8bit-487-beta-inprocess/cmdbuf.c	2017-03-30 12:38:56.350149857 +0300
+@@ -21,7 +21,6 @@
+ #endif
+ 
+ extern int sc_width;
+-extern int utf_mode;
+ 
+ static char cmdbuf[CMDBUF_SIZE]; /* Buffer for holding a multi-char command */
+ static int cmd_col;		/* Current column of the cursor */
+@@ -153,12 +152,7 @@
+ 		ch = step_char(&ns, +1, endline);
+ 		while (s < ns)
+ 			putchr(*s++);
+-		if (!utf_mode)
+ 			width = 1;
+-		else if (is_composing_char(ch) || is_combining_char(prev_ch, ch))
+-			width = 0;
+-		else
+-			width = is_wide_char(ch) ? 2 : 1;
+ 		cmd_col += width;
+ 		prompt_col += width;
+ 		prev_ch = ch;
+@@ -199,26 +193,8 @@
+ 	char *pr;
+ 	int width;
+ 
+-	if (len == 1)
+-	{
+ 		pr = prchar((int) ch);
+ 		width = (int) strlen(pr);
+-	} else
+-	{
+-		pr = prutfchar(ch);
+-		if (is_composing_char(ch))
+-			width = 0;
+-		else if (is_ubin_char(ch))
+-			width = (int) strlen(pr);
+-		else
+-		{
+-			LWCHAR prev_ch = step_char(&p, -1, cmdbuf);
+-			if (is_combining_char(prev_ch, ch))
+-				width = 0;
+-			else
+-				width = is_wide_char(ch) ? 2 : 1;
+-		}
+-	}
+ 	if (pwidth != NULL)
+ 		*pwidth	= width;
+ 	if (bswidth != NULL)
+@@ -1209,54 +1185,8 @@
+ 	int action;
+ 	int len;
+ 
+-	if (!utf_mode)
+-	{
+ 		cmd_mbc_buf[0] = c;
+ 		len = 1;
+-	} else
+-	{
+-		/* Perform strict validation in all possible cases.  */
+-		if (cmd_mbc_buf_len == 0)
+-		{
+-		 retry:
+-			cmd_mbc_buf_index = 1;
+-			*cmd_mbc_buf = c;
+-			if (IS_ASCII_OCTET(c))
+-				cmd_mbc_buf_len = 1;
+-			else if (IS_UTF8_LEAD(c))
+-			{
+-				cmd_mbc_buf_len = utf_len(c);
+-				return (CC_OK);
+-			} else
+-			{
+-				/* UTF8_INVALID or stray UTF8_TRAIL */
+-				bell();
+-				return (CC_ERROR);
+-			}
+-		} else if (IS_UTF8_TRAIL(c))
+-		{
+-			cmd_mbc_buf[cmd_mbc_buf_index++] = c;
+-			if (cmd_mbc_buf_index < cmd_mbc_buf_len)
+-				return (CC_OK);
+-			if (!is_utf8_well_formed(cmd_mbc_buf, cmd_mbc_buf_index))
+-			{
+-				/* complete, but not well formed (non-shortest form), sequence */
+-				cmd_mbc_buf_len = 0;
+-				bell();
+-				return (CC_ERROR);
+-			}
+-		} else
+-		{
+-			/* Flush incomplete (truncated) sequence.  */
+-			cmd_mbc_buf_len = 0;
+-			bell();
+-			/* Handle new char.  */
+-			goto retry;
+-		}
+-
+-		len = cmd_mbc_buf_len;
+-		cmd_mbc_buf_len = 0;
+-	}
+ 
+ 	if (literal)
+ 	{
+diff -r -u less-487/config.log less-8bit-487-beta-inprocess/config.log
+--- less-487/config.log	2017-03-30 12:46:14.231176113 +0300
++++ less-8bit-487-beta-inprocess/config.log	2017-03-30 12:39:08.597150591 +0300
+@@ -4,7 +4,7 @@
+ It was created by less configure 1, which was
+ generated by GNU Autoconf 2.69.  Invocation command line was
+ 
+-  $ ./configure --prefix=/usr
++  $ ./configure 
+ 
+ ## --------- ##
+ ## Platform. ##
+@@ -264,8 +264,8 @@
+ configure:3929: result: no
+ configure:3939: checking for library containing regcmp
+ configure:3970: gcc -o conftest -g -O2   conftest.c  >&5
+-/tmp/ccyI7fz8.o: In function `main':
+-/home/saahriktu/prog172/4/less-487/conftest.c:20: undefined reference to `regcmp'
++/tmp/cchCeu79.o: In function `main':
++/home/saahriktu/prog172/4/less-8bit-487-beta-inprocess/conftest.c:20: undefined reference to `regcmp'
+ collect2: error: ld returned 1 exit status
+ configure:3970: $? = 1
+ configure: failed program was:
+@@ -1294,7 +1294,7 @@
+ mandir='${datarootdir}/man'
+ oldincludedir='/usr/include'
+ pdfdir='${docdir}'
+-prefix='/usr'
++prefix='/usr/local'
+ program_transform_name='s,x,x,'
+ psdir='${docdir}'
+ sbindir='${exec_prefix}/sbin'
+diff -r -u less-487/config.status less-8bit-487-beta-inprocess/config.status
+--- less-487/config.status	2017-03-30 12:46:14.174176110 +0300
++++ less-8bit-487-beta-inprocess/config.status	2017-03-30 12:39:08.537150588 +0300
+@@ -423,7 +423,7 @@
+ 
+ Report bugs to the package provider."
+ 
+-ac_cs_config="'--prefix=/usr'"
++ac_cs_config=""
+ ac_cs_version="\
+ less config.status 1
+ configured by ./configure, generated by GNU Autoconf 2.69,
+@@ -433,7 +433,7 @@
+ This config.status script is free software; the Free Software Foundation
+ gives unlimited permission to copy, distribute and modify it."
+ 
+-ac_pwd='/home/saahriktu/prog172/4/less-487'
++ac_pwd='/home/saahriktu/prog172/4/less-8bit-487-beta-inprocess'
+ srcdir='.'
+ INSTALL='/usr/bin/install -c'
+ test -n "$AWK" || AWK=awk
+@@ -513,7 +513,7 @@
+ fi
+ 
+ if $ac_cs_recheck; then
+-  set X /bin/sh './configure'  '--prefix=/usr' $ac_configure_extra_args --no-create --no-recursion
++  set X /bin/sh './configure'  $ac_configure_extra_args --no-create --no-recursion
+   shift
+   $as_echo "running CONFIG_SHELL=/bin/sh $*" >&6
+   CONFIG_SHELL='/bin/sh'
+@@ -645,7 +645,7 @@
+ S["sbindir"]="${exec_prefix}/sbin"
+ S["bindir"]="${exec_prefix}/bin"
+ S["program_transform_name"]="s,x,x,"
+-S["prefix"]="/usr"
++S["prefix"]="/usr/local"
+ S["exec_prefix"]="${prefix}"
+ S["PACKAGE_URL"]=""
+ S["PACKAGE_BUGREPORT"]=""
+diff -r -u less-487/cvt.c less-8bit-487-beta-inprocess/cvt.c
+--- less-487/cvt.c	2016-10-25 17:37:35.000000000 +0300
++++ less-8bit-487-beta-inprocess/cvt.c	2017-03-30 12:38:56.351149857 +0300
+@@ -14,8 +14,6 @@
+ #include "less.h"
+ #include "charset.h"
+ 
+-extern int utf_mode;
+-
+ /*
+  * Get the length of a buffer needed to convert a string.
+  */
+@@ -24,13 +22,6 @@
+ 	int len;
+ 	int ops;
+ {
+-	if (utf_mode)
+-		/*
+-		 * Just copying a string in UTF-8 mode can cause it to grow 
+-		 * in length.
+-		 * Four output bytes for one input byte is the worst case.
+-		 */
+-		len *= 4;
+ 	return (len + 1);
+ }
+ 
+@@ -97,7 +88,6 @@
+ 			/* Just copy the char to the destination buffer. */
+ 			if ((ops & CVT_TO_LC) && IS_UPPER(ch))
+ 				ch = TO_LOWER(ch);
+-			put_wchar(&dst, ch);
+ 			/* Record the original position of the char. */
+ 			if (chpos != NULL)
+ 				chpos[dst_pos] = src_pos;
+diff -r -u less-487/filename.c less-8bit-487-beta-inprocess/filename.c
+--- less-487/filename.c	2016-10-25 17:37:36.000000000 +0300
++++ less-8bit-487-beta-inprocess/filename.c	2017-03-30 12:38:56.351149857 +0300
+@@ -51,7 +51,6 @@
+ extern int secure;
+ extern int use_lessopen;
+ extern int ctldisp;
+-extern int utf_mode;
+ extern IFILE curr_ifile;
+ extern IFILE old_ifile;
+ #if SPACES_IN_FILENAMES
+@@ -483,11 +482,6 @@
+ 	n = read(f, data, sizeof(data));
+ 	if (n <= 0)
+ 		return (0);
+-	if (utf_mode)
+-	{
+-		bin_count = utf_bin_count(data, n);
+-	} else
+-	{
+ 		pend = &data[n];
+ 		for (p = data;  p < pend;  )
+ 		{
+@@ -500,7 +494,6 @@
+ 			} else if (binary_char(c))
+ 				bin_count++;
+ 		}
+-	}
+ 	/*
+ 	 * Call it a binary file if there are more than 5 binary characters
+ 	 * in the first 256 bytes of the file.
+diff -r -u less-487/funcs.h less-8bit-487-beta-inprocess/funcs.h
+--- less-487/funcs.h	2016-10-25 17:37:39.000000000 +0300
++++ less-8bit-487-beta-inprocess/funcs.h	2017-03-30 12:38:56.351149857 +0300
+@@ -56,12 +56,6 @@
+ 	public int binary_char ();
+ 	public int control_char ();
+ 	public char * prchar ();
+-	public char * prutfchar ();
+-	public int utf_len ();
+-	public int is_utf8_well_formed ();
+-	public int utf_bin_count ();
+-	public LWCHAR get_wchar ();
+-	public void put_wchar ();
+ 	public LWCHAR step_char ();
+ 	public int is_composing_char ();
+ 	public int is_ubin_char ();
+diff -r -u less-487/less.man less-8bit-487-beta-inprocess/less.man
+--- less-487/less.man	2016-10-25 17:37:40.000000000 +0300
++++ less-8bit-487-beta-inprocess/less.man	2017-03-30 12:38:56.352149857 +0300
+@@ -1178,11 +1178,6 @@
+ 
+        next   Selects a character set appropriate for NeXT computers.
+ 
+-       utf-8  Selects  the  UTF-8  encoding  of  the  ISO 10646 character set.
+-              UTF-8 is special in that it supports  multi-byte  characters  in
+-              the  input  file.   It  is  the only character set that supports
+-              multi-byte characters.
+-
+        windows
+               Selects a character set appropriate for  Microsoft  Windows  (cp
+               1251).
+diff -r -u less-487/less.nro less-8bit-487-beta-inprocess/less.nro
+--- less-487/less.nro	2016-10-25 17:37:40.000000000 +0300
++++ less-8bit-487-beta-inprocess/less.nro	2017-03-30 12:38:56.353149857 +0300
+@@ -1281,10 +1281,6 @@
+ Selects a Russian character set.
+ .IP next
+ Selects a character set appropriate for NeXT computers.
+-.IP utf-8
+-Selects the UTF-8 encoding of the ISO 10646 character set.
+-UTF-8 is special in that it supports multi-byte characters in the input file.
+-It is the only character set that supports multi-byte characters.
+ .IP windows
+ Selects a character set appropriate for Microsoft Windows (cp 1251).
+ .PP
+diff -r -u less-487/line.c less-8bit-487-beta-inprocess/line.c
+--- less-487/line.c	2016-10-25 17:37:36.000000000 +0300
++++ less-8bit-487-beta-inprocess/line.c	2017-03-30 13:14:32.782277962 +0300
+@@ -58,7 +58,6 @@
+ extern int bl_s_width, bl_e_width;
+ extern int so_s_width, so_e_width;
+ extern int sc_width, sc_height;
+-extern int utf_mode;
+ extern POSITION start_attnpos;
+ extern POSITION end_attnpos;
+ 
+@@ -281,28 +280,13 @@
+ 
+ 		width = 0;
+ 
+-		if (!IS_ASCII_OCTET(c) && utf_mode)
+-		{
+-			/* Assumes well-formedness validation already done.  */
+-			LWCHAR ch;
+-
+-			len = utf_len(c);
+-			if (from + len > curr)
+-				break;
+-			ch = get_wchar(linebuf + from);
+-			if (!is_composing_char(ch) && !is_combining_char(prev_ch, ch))
+-				width = is_wide_char(ch) ? 2 : 1;
+-			prev_ch = ch;
+-		} else
+-		{
+ 			len = 1;
+ 			if (c == '\b')
+ 				/* XXX - Incorrect if several '\b' in a row.  */
+-				width = (utf_mode && is_wide_char(prev_ch)) ? -2 : -1;
++				width = -1;
+ 			else if (!control_char(c))
+ 				width = 1;
+ 			prev_ch = 0;
+-		}
+ 
+ 		if (width == 2 && shift - shifted == 1) {
+ 			/* Should never happen when called by pshift_all().  */
+@@ -428,10 +412,8 @@
+ 		 * Backspace moves backwards one or two positions.
+ 		 * XXX - Incorrect if several '\b' in a row.
+ 		 */
+-		return (utf_mode && is_wide_char(prev_ch)) ? -2 : -1;
++		return -1;
+ 
+-	if (!utf_mode || is_ascii_char(ch))
+-	{
+ 		if (control_char((char)ch))
+ 		{
+ 			/*
+@@ -441,24 +423,6 @@
+ 			 */
+ 			return (0);
+ 		}
+-	} else
+-	{
+-		if (is_composing_char(ch) || is_combining_char(prev_ch, ch))
+-		{
+-			/*
+-			 * Composing and combining chars take up no space.
+-			 *
+-			 * Some terminals, upon failure to compose a
+-			 * composing character with the character(s) that
+-			 * precede(s) it will actually take up one column
+-			 * for the composing character; there isn't much
+-			 * we could do short of testing the (complex)
+-			 * composition process ourselves and printing
+-			 * a binary representation when it fails.
+-			 */
+-			return (0);
+-		}
+-	}
+ 
+ 	/*
+ 	 * Other characters take one or two columns,
+@@ -634,9 +598,6 @@
+ 		cs = (char) ch;
+ 		rep = &cs;
+ 		replen = 1;
+-	} else
+-	{
+-		replen = utf_len(rep[0]);
+ 	}
+ 	if (curr + replen >= size_linebuf-6)
+ 	{
+@@ -782,49 +743,7 @@
+ 		return (0);
+ 	}
+ 
+-	if (!utf_mode)
+-	{
+ 		r = do_append(c, NULL, pos);
+-	} else
+-	{
+-		/* Perform strict validation in all possible cases. */
+-		if (mbc_buf_len == 0)
+-		{
+-		retry:
+-			mbc_buf_index = 1;
+-			*mbc_buf = c;
+-			if (IS_ASCII_OCTET(c))
+-				r = do_append(c, NULL, pos);
+-			else if (IS_UTF8_LEAD(c))
+-			{
+-				mbc_buf_len = utf_len(c);
+-				mbc_pos = pos;
+-				return (0);
+-			} else
+-				/* UTF8_INVALID or stray UTF8_TRAIL */
+-				r = flush_mbc_buf(pos);
+-		} else if (IS_UTF8_TRAIL(c))
+-		{
+-			mbc_buf[mbc_buf_index++] = c;
+-			if (mbc_buf_index < mbc_buf_len)
+-				return (0);
+-			if (is_utf8_well_formed(mbc_buf, mbc_buf_index))
+-				r = do_append(get_wchar(mbc_buf), mbc_buf, mbc_pos);
+-			else
+-				/* Complete, but not shortest form, sequence. */
+-				mbc_buf_index = r = flush_mbc_buf(mbc_pos);
+-			mbc_buf_len = 0;
+-		} else
+-		{
+-			/* Flush incomplete (truncated) sequence.  */
+-			r = flush_mbc_buf(mbc_pos);
+-			mbc_buf_index = r + 1;
+-			mbc_buf_len = 0;
+-			/* Handle new char.  */
+-			if (!r)
+-				goto retry;
+- 		}
+-	}
+ 
+ 	/*
+ 	 * If we need to shift the line, do it.
+@@ -840,7 +759,7 @@
+ 	if (r)
+ 	{
+ 		/* How many chars should caller back up? */
+-		r = (!utf_mode) ? 1 : mbc_buf_index;
++		r = 1;
+ 	}
+ 	return (r);
+ }
+@@ -887,15 +806,8 @@
+ 		 * bold (if an identical character is overstruck),
+ 		 * or just deletion of the character in the buffer.
+ 		 */
+-		overstrike = utf_mode ? -1 : 0;
+-		if (utf_mode)
+-		{
+-			/* To be correct, this must be a base character.  */
+-			prev_ch = get_wchar(linebuf + curr);
+-		} else
+-		{
+-			prev_ch = (unsigned char) linebuf[curr];
+-		}
++		overstrike = 0;
++		prev_ch = (unsigned char) linebuf[curr];
+ 		a = attr[curr];
+ 		if (ch == prev_ch)
+ 		{
+@@ -928,11 +840,6 @@
+ 		/* Else we replace prev_ch, but we keep its attributes.  */
+ 	} else if (overstrike < 0)
+ 	{
+-		if (   is_composing_char(ch)
+-		    || is_combining_char(get_wchar(linebuf + curr), ch))
+-			/* Continuation of the same overstrike.  */
+-			a = last_overstrike;
+-		else
+ 			overstrike = 0;
+ 	}
+ 
+@@ -950,35 +857,9 @@
+ 			STORE_TAB(a, pos);
+ 			break;
+ 		}
+-	} else if ((!utf_mode || is_ascii_char(ch)) && control_char((char)ch))
+-	{
+-	do_control_char:
+-		if (ctldisp == OPT_ON || (ctldisp == OPT_ONPLUS && IS_CSI_START(ch)))
+-		{
+-			/*
+-			 * Output as a normal character.
+-			 */
+-			STORE_CHAR(ch, AT_NORMAL, rep, pos);
+-		} else 
+-		{
+-			STORE_PRCHAR((char) ch, pos);
+-		}
+-	} else if (utf_mode && ctldisp != OPT_ON && is_ubin_char(ch))
+-	{
+-		char *s;
+-
+-		s = prutfchar(ch);
+-
+-		if (column + (int) strlen(s) - 1 +
+-		    pwidth(' ', binattr, 0) + attr_ewidth(binattr) > sc_width)
+-			return (1);
+-
+-		for ( ;  *s != 0;  s++)
+-			STORE_CHAR(*s, AT_BINARY, NULL, pos);
+- 	} else
+-	{
+-		STORE_CHAR(ch, a, rep, pos);
+ 	}
++do_control_char:;
++		STORE_CHAR(ch, a, rep, pos);
+  	return (0);
+ }
+ 
+diff -r -u less-487/Makefile less-8bit-487-beta-inprocess/Makefile
+--- less-487/Makefile	2017-03-30 12:46:14.208176112 +0300
++++ less-8bit-487-beta-inprocess/Makefile	2017-03-30 12:39:08.572150590 +0300
+@@ -19,7 +19,7 @@
+ 
+ LIBS =  -lncursesw
+ 
+-prefix = /usr
++prefix = /usr/local
+ exec_prefix = ${prefix}
+ 
+ # Where the installed binary goes.
+diff -r -u less-487/output.c less-8bit-487-beta-inprocess/output.c
+--- less-487/output.c	2016-10-25 17:37:37.000000000 +0300
++++ less-8bit-487-beta-inprocess/output.c	2017-03-30 12:38:56.354149857 +0300
+@@ -384,25 +384,6 @@
+ putchr(c)
+ 	int c;
+ {
+-#if 0 /* fake UTF-8 output for testing */
+-	extern int utf_mode;
+-	if (utf_mode)
+-	{
+-		static char ubuf[MAX_UTF_CHAR_LEN];
+-		static int ubuf_len = 0;
+-		static int ubuf_index = 0;
+-		if (ubuf_len == 0)
+-		{
+-			ubuf_len = utf_len(c);
+-			ubuf_index = 0;
+-		}
+-		ubuf[ubuf_index++] = c;
+-		if (ubuf_index < ubuf_len)
+-			return c;
+-		c = get_wchar(ubuf) & 0xFF;
+-		ubuf_len = 0;
+-	}
+-#endif
+ 	if (need_clr)
+ 	{
+ 		need_clr = 0;
+diff -r -u less-487/search.c less-8bit-487-beta-inprocess/search.c
+--- less-487/search.c	2016-10-25 17:37:37.000000000 +0300
++++ less-8bit-487-beta-inprocess/search.c	2017-03-30 12:38:56.354149857 +0300
+@@ -32,7 +32,6 @@
+ extern void * constant ml_search;
+ extern POSITION start_attnpos;
+ extern POSITION end_attnpos;
+-extern int utf_mode;
+ extern int screen_trashed;
+ #if HILITE_SEARCH
+ extern int hilite_search;
+diff -r -u less-487/ttyin.c less-8bit-487-beta-inprocess/ttyin.c
+--- less-487/ttyin.c	2016-10-25 17:37:37.000000000 +0300
++++ less-8bit-487-beta-inprocess/ttyin.c	2017-03-30 12:38:56.354149857 +0300
+@@ -25,7 +25,6 @@
+ 
+ public int tty;
+ extern int sigs;
+-extern int utf_mode;
+ 
+ /*
+  * Open keyboard for input.

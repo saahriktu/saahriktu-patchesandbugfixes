@@ -1,0 +1,70 @@
+--- coreutils-8.27/src/cat.c	2017-02-18 06:18:29.000000000 +0300
++++ coreutils-8.27-patched/src/cat.c	2017-03-25 10:03:15.660169193 +0300
+@@ -571,67 +571,6 @@
+      close_stdout does nothing.  */
+   atexit (close_stdout);
+ 
+-  /* Parse command line options.  */
+-
+-  while ((c = getopt_long (argc, argv, "benstuvAET", long_options, NULL))
+-         != -1)
+-    {
+-      switch (c)
+-        {
+-        case 'b':
+-          number = true;
+-          number_nonblank = true;
+-          break;
+-
+-        case 'e':
+-          show_ends = true;
+-          show_nonprinting = true;
+-          break;
+-
+-        case 'n':
+-          number = true;
+-          break;
+-
+-        case 's':
+-          squeeze_blank = true;
+-          break;
+-
+-        case 't':
+-          show_tabs = true;
+-          show_nonprinting = true;
+-          break;
+-
+-        case 'u':
+-          /* We provide the -u feature unconditionally.  */
+-          break;
+-
+-        case 'v':
+-          show_nonprinting = true;
+-          break;
+-
+-        case 'A':
+-          show_nonprinting = true;
+-          show_ends = true;
+-          show_tabs = true;
+-          break;
+-
+-        case 'E':
+-          show_ends = true;
+-          break;
+-
+-        case 'T':
+-          show_tabs = true;
+-          break;
+-
+-        case_GETOPT_HELP_CHAR;
+-
+-        case_GETOPT_VERSION_CHAR (PROGRAM_NAME, AUTHORS);
+-
+-        default:
+-          usage (EXIT_FAILURE);
+-        }
+-    }
+-
+   /* Get device, i-node number, and optimal blocksize of output.  */
+ 
+   if (fstat (STDOUT_FILENO, &stat_buf) < 0)

@@ -1,0 +1,27 @@
+--- coreutils-8.27/src/ls.c	2017-01-21 17:53:43.000000000 +0300
++++ coreutils-8.27-patched/src/ls.c	2017-03-25 10:13:19.957205428 +0300
+@@ -1664,13 +1664,13 @@
+     case LS_MULTI_COL:
+       /* This is for the 'dir' program.  */
+       format = many_per_line;
+-      set_quoting_style (NULL, escape_quoting_style);
++      set_quoting_style (NULL, literal_quoting_style);
+       break;
+ 
+     case LS_LONG_FORMAT:
+       /* This is for the 'vdir' program.  */
+       format = long_format;
+-      set_quoting_style (NULL, escape_quoting_style);
++      set_quoting_style (NULL, literal_quoting_style);
+       break;
+ 
+     case LS_LS:
+@@ -1678,7 +1678,7 @@
+       if (isatty (STDOUT_FILENO))
+         {
+           format = many_per_line;
+-          set_quoting_style (NULL, shell_escape_quoting_style);
++          set_quoting_style (NULL, literal_quoting_style);
+           /* See description of qmark_funny_chars, above.  */
+           qmark_funny_chars = true;
+         }

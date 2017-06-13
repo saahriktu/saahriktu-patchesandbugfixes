@@ -1,0 +1,36 @@
+20c20
+< clear && [ `tty | grep "tty"` ] && clear_console
+---
+> clear
+52c52
+< 	curl -s "$request_url" -o /tmp/vk_login_page -c /tmp/vk_cookies \
+---
+> 	curl -k -s "$request_url" -o /tmp/vk_login_page -c /tmp/vk_cookies \
+58c58
+< 	curl -s -L --data-urlencode "email=${login}" --data-urlencode "&pass=${pass}" \
+---
+> 	curl -k -s -L --data-urlencode "email=${login}" --data-urlencode "&pass=${pass}" \
+77c77
+< 	curl "$verbose" -d "${params}" -d "@/tmp/vk_token" "https://api.vk.com/method/${method}"
+---
+> 	curl -k "$verbose" -d "${params}" -d "@/tmp/vk_token" "https://api.vk.com/method/${method}"
+96c96
+< 	r=`curl -s -d "user_ids=${1}&fields=last_name,first_name" -d "@/tmp/vk_token" \
+---
+> 	r=`curl -k -s -d "user_ids=${1}&fields=last_name,first_name" -d "@/tmp/vk_token" \
+109c109
+< 	grep -oP "<${1}>.*</${1}>" | sed 's/<[^>]*>//g'
+---
+> 	grep -oP "<${1}>.*</${1}>" | sed 's/<[^>]*>//g' | iconv -c -f utf-8
+259c259
+< 		res=`echo "$input" | curl -s -d "user_ids=$uid" \
+---
+> 		res=`echo "$input" | iconv -c -f koi8-r -t utf-8 | curl -k -s -d "user_ids=$uid" \
+487a488,492
+> get_this_msg(){
+>         read -ep "msg id?> " gtmid
+> 	reply="0"
+>         get_msg $gtmid
+> }
+561a567
+> 			y) get_this_msg;;
