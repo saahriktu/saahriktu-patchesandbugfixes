@@ -1,0 +1,17 @@
+--- glibc-2.27.9000-326-g0085be1415/manual/startup.texi	2018-04-19 13:45:11.000000001 +0300
++++ startup.texi	2018-05-11 12:19:20.449277945 +0300
+@@ -1005,14 +1005,6 @@
+ intercept this signal; see @ref{Signal Handling}.
+ @end deftypefun
+ 
+-@c Put in by rms.  Don't remove.
+-@cartouche
+-@strong{Future Change Warning:} Proposed Federal censorship regulations
+-may prohibit us from giving you information about the possibility of
+-calling this function.  We would be required to say that this is not an
+-acceptable way of terminating a program.
+-@end cartouche
+-
+ @node Termination Internals
+ @subsection Termination Internals
+ 
